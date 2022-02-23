@@ -1,0 +1,242 @@
+---
+title: "project_MAP_569"
+author: "NIU"
+date: "20/02/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE)
+library(readr)
+library(GGally)
+library(dplyr)
+library(ggfortify)
+library(corrplot)
+library(car)
+
+
+
+```
+
+## R Markdown
+```{r}
+abalone <- read_csv("Abalone_data.csv")
+abalone$Sex <- as.factor(abalone$Sex)
+abalone = abalone[is.finite(log(abalone$Height)), ]
+
+
+# train test split
+train_test_spit <- function(data, train_percent){
+  smp_size <- floor(train_percent * nrow(data) /100)
+  train_ind <- sample(seq_len(nrow(data)), size = smp_size)
+  set.seed(1)
+  train <- data[train_ind, ]
+  test <- data[-train_ind, ]
+  list(train = train, test = test)
+}
+
+abalone_split <- train_test_spit(abalone,80)
+train <- abalone_split$train
+test <- abalone_split$test
+
+
+
+## 75% of the sample size
+```
+
+
+```{r}
+ggpairs(abalone, lower = list(continuous = wrap(ggally_points, size = 0.1, mapping = ggplot2::aes(colour=Sex))), columns = 2:9,
+        ) 
+
+r=round(cor(abalone[,2:9]),2); corrplot(r,method="ellipse")
+
+
+
+
+```
+
+```{r}
+# plot(abalone$Whole_weight,log(abalone$Rings))
+# plot(abalone$Whole_weight,abalone$Rings)
+# plot(log(abalone$Whole_weight),log(abalone$Rings))
+# plot(abalone$Height,log(abalone$Rings))
+# plot(log(abalone$Height),log(abalone$Rings))
+
+
+# plot(log(abalone$Diameter),log(abalone$Rings))
+
+feature_engineering <- function(abalone_raw, ancova = FALSE){
+  abalone_transform <- abalone_raw[-c(2:3,4:9)]
+  abalone_transform$log_Length = log(abalone_raw$Length)
+  abalone_transform$log_Diameter = log(abalone_raw$Diameter)
+  abalone_transform$log_Height = log(abalone_raw$Height)
+  abalone_transform$log_Shucked_weight = log(abalone_raw$Shucked_weight) 
+  abalone_transform$log_Viscera_weight = log(abalone_raw$Viscera_weight) 
+  abalone_transform$log_Shell_weight = log(abalone_raw$Shell_weight) 
+  abalone_transform$log_Whole_weight = log(abalone_raw$Whole_weight) 
+  abalone_transform$sqrt_log_Ring = sqrt(log(abalone_raw$Rings))
+  # abalone_transform = abalone_transform %>% filter(is.finite(abalone_transform$log_Height))
+  # abalone_transform$log_Height[!is.finite(abalone_transform$log_Height)] <- 3.3
+  
+  if(ancova){
+    abalone_transform$Sex[abalone_transform$Sex == 'M'] <- 'F'
+  }
+  
+  
+  abalone_transform
+} 
+
+
+abalone_transformed = feature_engineering(abalone)
+
+# ggpairs(abalone_transformed, upper = list(continuous = wrap("cor", family="sans")),lower = list(continuous = wrap(ggally_points, size = 0.1, mapping = ggplot2::aes(colour=Sex))), columns = 2:9,
+#         )
+```
+
+
+```{r}
+
+
+abalone_splited = train_test_spit(abalone,80)
+
+train = abalone_splited$train
+test = abalone_splited$test
+train_transformed = feature_engineering(train)
+test_transformed = feature_engineering(test)
+
+```
+
+
+
+```{r}
+data_1 <- train_transformed%>% filter(log_Height<4, log_Height>2.5)
+plot(train_transformed$log_Height,train_transformed$sqrt_log_Ring)
+
+model_height <- data_1%>% lm(formula = sqrt_log_Ring ~ log_Height)
+plot(model_height)
+ncvTest(model_height)
+
+summary(model_height)
+
+```
+
+## Question 8
+```{r}
+
+ggpairs(abalone_transformed, upper = list(continuous = wrap("cor", family="sans")),lower = list(continuous = wrap(ggally_points, size = 0.1, mapping = ggplot2::aes(colour=Sex))), columns = 2:9,
+        ) 
+
+
+```
+Some remarks:
+* some features are strongly correlated, is it a problem?
+* for the moment, we shall use log_Whole_weight, log_Shell_weight, log_Height, and log_diameter which has the largest correlation with the log_Ring
+* explain the form of the plot
+```{r}
+
+
+model_1 <-  data_1 %>% lm(formula = sqrt_log_Ring ~  log_Height + log_Shell_weight + log_Whole_weight + log_Diameter)
+
+summary(model_1)
+
+plot(model_1)
+
+# Breush-Pagan test the reason why choose model_1
+ncvTest(model_1)
+
+
+
+# Shapiro-Wilk test
+# shapiro.test(residuals(model_0)) 
+# shapiro.test(residuals(model_1)) 
+
+# remove the point 236 with a cook distance larger than 1, then refit the model
+# data_0 <- data_0[-c(236),]
+# model_0 <-  data_0 %>% lm(formula = log_Ring ~ log_Height + log_Shell_weight + log_Whole_weight + log_Diameter)
+# summary(model_0)
+# plot(model_0)
+
+
+
+```
+## Question 9
+
+As we can see from the result below, ANOVA suggests that our multilinear model is better than simple linear model
+```{r}
+anova(model_height,model_1)
+
+```
+
+
+```{r}
+# anvoca
+abalone %>% ggplot() + aes(x = Sex, y = Rings, color = Sex) + geom_boxplot(alpha=0.5,) + geom_jitter(width = 0.25)
+model_sex= data_1 %>% lm(formula = sqrt_log_Ring ~   Sex)
+summary(model_sex)
+
+
+
+
+data_2 = data.frame(data_1)
+
+# explain why doing this
+model_ancova = data_2 %>% lm(formula = sqrt_log_Ring ~  log_Height + log_Shell_weight*Sex + log_Whole_weight*Sex + log_Diameter)
+summary(model_ancova)
+data_2$Sex[data_1$Sex == 'M'] <- 'F'
+model_ancova = data_2 %>% lm(formula = sqrt_log_Ring ~  log_Height + log_Shell_weight*Sex + log_Whole_weight*Sex + log_Diameter)
+summary(model_ancova)
+
+# Question???
+```
+## performance on trainning set
+
+```{r}
+train_error <- function(lm) mean(lm$residuals^2)
+
+round_to_integer <- function(number){
+  if (number - floor(number) > 0.5) {
+    return(ceiling(number))
+  }
+  return(floor(number))
+}
+
+back_to_Ring <- function(vector){
+  vector_inversed = exp(vector^2)
+  as.double(lapply(vector_inversed,round_to_integer))
+}
+
+loss <- function(y, y_predict){
+  # return(mean((y -y_predict)^2))
+  return(mean(abs(y -y_predict)))
+}
+
+predict_as_ring <- function(lm, X_test, ancova = FALSE){
+  return( back_to_Ring(predict(lm, feature_engineering(X_test,ancova = ancova))))
+}
+
+predict_error <- function(lm,X_test,ancova = FALSE) {
+  return(loss(X_test$Rings, predict_as_ring(lm, X_test, ancova = ancova) ) )
+}
+
+```
+
+```{r}
+predict_error(model_height, test)
+predict_error(model_1, test)
+predict_error(model_ancova, test,ancova = TRUE)
+
+```
+```{r}
+# let me see
+
+
+result = data.frame(y = test$Rings, y_predict = predict_as_ring(model_ancova,test,ancova = TRUE))
+
+```
+
+
+
