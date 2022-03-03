@@ -253,6 +253,14 @@ Anova(model_ancova_1)
 ```
 
 ```{r}
+data_2$Sex[data_1$Sex == 'M'] <- 'F'
+data_2$Sex = relevel(data_2$Sex , ref="I")
+model_ancova_1_1 = data_2 %>% lm(formula = sqrt_log_Ring ~  log_Shell_weight*Sex +log_Height*Sex +  log_Whole_weight*Sex + log_Diameter*Sex)
+summary(model_ancova_1_1)
+# Question???
+```
+
+```{r}
 #replace use variables with all interactions, Sex=I as the baseline
 data_2 = data.frame(data_1)
 data_2$Sex = relevel(data_2$Sex , ref="M")
@@ -291,29 +299,41 @@ model_ancova_3_1 = data_2 %>% lm(formula = sqrt_log_Ring ~  log_Length+log_Diame
 summary(model_ancova_3_1)
 # Question???
 ```
+
 ```{r}
 #forward selection start from simplest model
-mod0=data_2 %>% lm(formula = sqrt_log_Ring~1)
-modForw1=stepAIC(mod0,model_ancova_1,trace=T,
-     direction=c('forward'))
-modForw1
-modForw1=stepAIC(model_1,model_ancova_1,trace=T,
-     direction=c('forward'))
-modForw1
+data_2 = data.frame(data_1)
+mod0= lm(sqrt_log_Ring~1,data=data_2)
+modForw=stepAIC(mod0,scope=list(upper=model_ancova_3,lower=mod0),trace=T,
+     direction=c('forward'),data=data_2)
+modForw
 ```
+
 ```{r}
-modBacw=stepAIC(model_1, model_ancova_1,trace=T,
-     direction=c('backward'))
+#forward selection start from simplest model
+data_2 = data.frame(data_1)
+mod0= lm(sqrt_log_Ring~1,data=data_2)
+modBacw=stepAIC(modForw,scope=list(upper=model_ancova_3,lower=mod0),trace=T,
+     direction=c('backward'),data=data_2)
 modBacw
 ```
 ```{r}
-AIC(model_1, model_ancova_1,model_height,mod0)
-BIC(model_1, model_ancova_1,model_height,mod0)
+data_2$Sex[data_1$Sex == 'M'] <- 'F'
+data_2$Sex = relevel(data_2$Sex , ref="M")
+mod0= lm(sqrt_log_Ring~1,data=data_2)
+modForw_1=stepAIC(mod0,scope=list(upper=model_ancova_3_1,lower=mod0),trace=T,
+     direction=c('forward'),data=data_2)
+modForw_1
 ```
-The simple model has the lowest AIC and BIC.
 ```{r}
-AIC(model_ancova_3,model_ancova_3_0,model_ancova_3_00)
+data_2$Sex[data_1$Sex == 'M'] <- 'F'
+data_2$Sex = relevel(data_2$Sex , ref="M")
+mod0= lm(sqrt_log_Ring~1,data=data_2)
+modBacw_1=stepAIC(model_ancova_3_1,scope=list(upper=model_ancova_3_1,lower=mod0),trace=T,
+     direction=c('backward'),data=data_2)
+modBacw_1
 ```
+
 ```{r}
 #4 variables 2 interactions, ziru's model
 data_2 = data.frame(data_1)
@@ -334,10 +354,10 @@ summary(model_ancova_2_1)
 ```
 
 ```{r}
-AIC(model_1, model_ancova_1,model_ancova_2,model_ancova_2_1,model_ancova_3,model_ancova_3_1,model_ancova_3_0,model_ancova_3_00)
-BIC(model_1, model_ancova_1,model_ancova_2,model_ancova_2_1,model_ancova_3,model_ancova_3_1,model_ancova_3_0,model_ancova_3_00)
+AIC(model_1, model_ancova_1,model_ancova_2,model_ancova_2_1,model_ancova_3,model_ancova_3_1,model_ancova_3_0,model_ancova_3_00,modForw,modForw_1)
+BIC(model_1, model_ancova_1,model_ancova_2,model_ancova_2_1,model_ancova_3,model_ancova_3_1,model_ancova_3_0,model_ancova_3_00,modForw,modForw_1)
 ```
-model_1 has the lowest AIC and BIC, but the interaction terms are significant.
+modForw_1 has the lowest AIC and BIC.
 We calculate the error for each model and compare the errors.
 ```{r}
 train_error <- function(lm) mean(lm$residuals^2)
@@ -366,7 +386,6 @@ predict_error <- function(lm,X_test,ancova = FALSE) {
 ```{r}
 predict_error(model_height, abalone_test)
 predict_error(model_1, abalone_test)
-predict_error(model_ancova, abalone_test,ancova = TRUE)
 predict_error(model_ancova_1, abalone_test,ancova = TRUE)
 predict_error(model_ancova_1_1, abalone_test,ancova = TRUE)
 predict_error(model_ancova_2, abalone_test,ancova = TRUE)
@@ -383,10 +402,7 @@ predict_error(model_ancova_2, abalone_test,ancova = FALSE)
 predict_error(model_ancova_3, abalone_test,ancova = FALSE)
 predict_error(mod0, abalone_test,ancova = FALSE)
 ```
-```{r}
-# let me see
-result = data.frame(y = abalone_test$Rings, y_predict = predict_as_ring(model_ancova,abalone_test,ancova = TRUE))
-```
+
 
 summary:
 model 1: 4 variables
@@ -405,7 +421,6 @@ point 3: Does not make a big difference in performance of error for all models
 
 
 Feature selection:
-Use AIC/BIC: not include , simple models are better
-Use significance test: No Sex, include all variables
-Withe Sex interaction terms, include all variables then select by Anova (model_ancova_3_0)
+Use AIC/BIC: modForw_1 all variables, 5 interactions
+Use significance test: Withe Sex interaction terms, include all variables then select by Anova (model_ancova_3_0)
 Use best prediction: Withe Sex interaction terms, include all variables then select by Anova (model_ancova_3_0) (slightly better)
