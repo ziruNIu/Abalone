@@ -413,10 +413,10 @@ model_ancova_3: all variables, all interactions
 model_ancova_3_0: significant interactions by Anova
 model_ancova_3_00: significant interactions by anova
 
-
+model_ancova_1_1,model_ancova_1_1, model_ancova_3_1: Change M to F, only compare M and I
 
 point 1: Assumption 3 (uncorrelated error) and 4 (errors are Gaussian) are not satisfied. 
-point 2: AIC and BIC models shows simplier models are better, but after regression it shows that the interactions terms are significant. 
+point 2: Change M to F makes slightly better result
 point 3: Does not make a big difference in performance of error for all models
 
 
